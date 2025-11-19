@@ -1,10 +1,16 @@
 import { useState } from 'react';
 import './App.css'; // 手順4で作るCSSを読み込み
 
+interface Todo {
+  id: number;
+  text: string;
+  completed: boolean;
+}
+
 function App() {
   // 1. Stateの定義
-  const [todos, setTodos] = useState([]); // TODOリスト
-  const [inputVal, setInputVal] = useState(""); // 入力フォームの値
+  const [todos, setTodos] = useState<Todo[]>([]); // TODOリスト
+  const [inputVal, setInputVal] = useState<string>(""); // 入力フォームの値
 
   // 2. タスク追加機能
   const handleAddTodo = () => {
@@ -21,7 +27,7 @@ function App() {
   };
 
   // 3. 完了/未完了の切り替え機能
-  const toggleTodo = (id) => {
+  const toggleTodo = (id: number) => {
     const newTodos = todos.map((todo) => {
       if (todo.id === id) {
         return { ...todo, completed: !todo.completed };
@@ -32,7 +38,7 @@ function App() {
   };
 
   // 4. 削除機能
-  const deleteTodo = (id) => {
+  const deleteTodo = (id: number) => {
     const newTodos = todos.filter((todo) => todo.id !== id);
     setTodos(newTodos);
   };
