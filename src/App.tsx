@@ -8,17 +8,105 @@ import {
   MoreHorizontal, LayoutGrid
 } from 'lucide-react';
 
-// --- Types & Constants ---
+// --- Types & Interfaces ---
 
-const TASK_TYPES = {
-  STRATEGIC: 'strategic', // 戦略タスク（KGI/KPI紐づき）
-  NORMAL: 'normal',       // 通常タスク（KGI紐づきなし）
-  ROUTINE: 'routine',     // ルーティン
+type TaskType = 'strategic' | 'normal' | 'routine';
+type TaskStatus = 'todo' | 'done';
+type Phase = 'plan-strategy' | 'plan-queue' | 'do' | 'check';
+
+interface Kpi {
+  id: number;
+  title: string;
+  isExpanded: boolean;
+  progress?: number;
+}
+
+interface Kgi {
+  id: number;
+  title: string;
+  deadline: string;
+  isExpanded: boolean;
+  kpis: Kpi[];
+}
+
+interface Task {
+  id: number;
+  kgiId: number | null;
+  kpiId: number | null;
+  title: string;
+  type: TaskType;
+  status: TaskStatus;
+  estimate: number;
+  isContinuous: boolean;
+}
+
+interface Routine {
+  id: number | string;
+  title: string;
+  timing: 'morning' | 'night';
+  done: boolean;
+}
+
+interface KdiLog {
+  taskId: number;
+  quality: number;
+  focus: number;
+  fatigue: number;
+}
+
+interface CheckData {
+  problemLogs: any[];
+  keepLogs: any[];
+  kdiLogs: KdiLog[];
+}
+
+interface AppData {
+  kgis: Kgi[];
+  tasks: Task[];
+  routines: Routine[];
+  todayTasks: Task[];
+  checkData: CheckData;
+  currentPhase: Phase;
+}
+
+// Checkフェーズで使用する拡張タスク型
+interface AnalysisItem extends Task {
+  issue: string;
+  analysisKind: 'problem' | 'success';
+  logData?: KdiLog; // オプショナル型として定義
+}
+
+// --- Constants ---
+
+const TASK_TYPES: Record<string, TaskType> = {
+  STRATEGIC: 'strategic',
+  NORMAL: 'normal',
+  ROUTINE: 'routine',
 };
+
+interface Factor {
+  id: string;
+  label: string;
+  detail: string;
+}
+
+const FAILURE_FACTORS: Factor[] = [
+  { id: 'A', label: 'A. 行動不足', detail: '時間がなかった、忘れていた' },
+  { id: 'B', label: 'B. 質・量不足', detail: '見積もりが甘い、集中不足' },
+  { id: 'C', label: 'C. 想定外', detail: '差し込み、体調不良' },
+  { id: 'D', label: 'D. 仮説誤り', detail: '効果が薄い、無意味だった' },
+];
+
+const SUCCESS_FACTORS: Factor[] = [
+  { id: 'A', label: 'A. 再現性確保 (Keep)', detail: '成功パターンとしてルーティン化・定着させる' },
+  { id: 'B', label: 'B. 横展開 (Apply)', detail: 'このやり方を他のタスクやプロジェクトにも応用する' },
+  { id: 'C', label: 'C. 仕組み化 (Systemize)', detail: 'ツール化や自動化でさらに効率を上げる' },
+  { id: 'D', label: 'D. 実績記録 (Log)', detail: '自信として記録し、モチベーションにする' },
+];
 
 // --- Initial Data ---
 
-const initialData = {
+const initialData: AppData = {
   kgis: [
     {
       id: 101,
@@ -27,14 +115,14 @@ const initialData = {
       isExpanded: true, 
       kpis: [
         { id: 201, title: 'MVPの仕様を定義する', isExpanded: true },
-        { id: 202, title: 'デザインシステム構築', isExpanded: true } // サンプル追加
+        { id: 202, title: 'デザインシステム構築', isExpanded: true } 
       ]
     }
   ],
   tasks: [
-    { id: 1, kgiId: 101, kpiId: 201, title: '競合アプリ調査', type: TASK_TYPES.STRATEGIC, status: 'todo', estimate: 60, isContinuous: true },
-    { id: 2, kgiId: 101, kpiId: 201, title: 'UIデザイン作成', type: TASK_TYPES.STRATEGIC, status: 'todo', estimate: 90, isContinuous: true },
-    { id: 3, kgiId: null, kpiId: null, title: 'メール返信', type: TASK_TYPES.NORMAL, status: 'todo', estimate: 30, isContinuous: false },
+    { id: 1, kgiId: 101, kpiId: 201, title: '競合アプリ調査', type: 'strategic', status: 'todo', estimate: 60, isContinuous: true },
+    { id: 2, kgiId: 101, kpiId: 201, title: 'UIデザイン作成', type: 'strategic', status: 'todo', estimate: 90, isContinuous: true },
+    { id: 3, kgiId: null, kpiId: null, title: 'メール返信', type: 'normal', status: 'todo', estimate: 30, isContinuous: false },
   ],
   routines: [
     { id: 'r1', title: '朝：KGI確認', timing: 'morning', done: false },
@@ -51,8 +139,13 @@ const initialData = {
 
 // --- Components ---
 
-const Sidebar = ({ currentPhase, setPhase }) => {
-  const menuItems = [
+interface SidebarProps {
+  currentPhase: Phase;
+  setPhase: (phase: Phase) => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ currentPhase, setPhase }) => {
+  const menuItems: { id: Phase; icon: React.ElementType; label: string }[] = [
     { id: 'plan-strategy', icon: Target, label: 'Strategy Plan' },
     { id: 'plan-queue', icon: List, label: 'Task Queue' },
     { id: 'do', icon: Play, label: 'Do Phase' },
@@ -89,10 +182,17 @@ const Sidebar = ({ currentPhase, setPhase }) => {
 };
 
 // --- Phase: Plan Strategy ---
-const PlanStrategy = ({ data, setData }) => {
+
+interface PhaseProps {
+  data: AppData;
+  setData: React.Dispatch<React.SetStateAction<AppData>>;
+  setPhase?: (phase: Phase) => void; // setPhase is optional for some components
+}
+
+const PlanStrategy: React.FC<PhaseProps> = ({ data, setData }) => {
   
   const addKgi = () => {
-    const newKgi = {
+    const newKgi: Kgi = {
       id: Date.now(),
       title: '新しい目標 (KGI)',
       deadline: '',
@@ -102,7 +202,7 @@ const PlanStrategy = ({ data, setData }) => {
     setData({ ...data, kgis: [...data.kgis, newKgi] });
   };
 
-  const toggleKgi = (id) => {
+  const toggleKgi = (id: number) => {
     setData({
       ...data,
       kgis: data.kgis.map(k => k.id === id ? { ...k, isExpanded: !k.isExpanded } : k)
@@ -110,7 +210,7 @@ const PlanStrategy = ({ data, setData }) => {
   };
 
   // KPIの開閉トグル
-  const toggleKpi = (kgiId, kpiId) => {
+  const toggleKpi = (kgiId: number, kpiId: number) => {
     setData({
       ...data,
       kgis: data.kgis.map(k => 
@@ -121,22 +221,22 @@ const PlanStrategy = ({ data, setData }) => {
     });
   };
 
-  const updateKgi = (id, field, value) => {
+  const updateKgi = (id: number, field: keyof Kgi, value: any) => {
     setData({
       ...data,
       kgis: data.kgis.map(k => k.id === id ? { ...k, [field]: value } : k)
     });
   };
 
-  const addKpi = (kgiId) => {
-    const newKpi = { id: Date.now(), title: '', isExpanded: true };
+  const addKpi = (kgiId: number) => {
+    const newKpi: Kpi = { id: Date.now(), title: '', isExpanded: true };
     setData({
       ...data,
       kgis: data.kgis.map(k => k.id === kgiId ? { ...k, kpis: [...k.kpis, newKpi] } : k)
     });
   };
 
-  const updateKpi = (kgiId, kpiId, field, value) => {
+  const updateKpi = (kgiId: number, kpiId: number, field: keyof Kpi, value: any) => {
     setData({
       ...data,
       kgis: data.kgis.map(k => 
@@ -147,7 +247,7 @@ const PlanStrategy = ({ data, setData }) => {
     });
   };
 
-  const deleteKpi = (kgiId, kpiId) => {
+  const deleteKpi = (kgiId: number, kpiId: number) => {
     setData({
       ...data,
       kgis: data.kgis.map(k => 
@@ -158,13 +258,13 @@ const PlanStrategy = ({ data, setData }) => {
     });
   };
 
-  const addStrategyTask = (kgiId, kpiId = null) => {
-    const newTask = {
+  const addStrategyTask = (kgiId: number, kpiId: number | null = null) => {
+    const newTask: Task = {
       id: Date.now(),
       kgiId: kgiId,
       kpiId: kpiId,
       title: '',
-      type: TASK_TYPES.STRATEGIC,
+      type: 'strategic',
       status: 'todo',
       estimate: 60,
       isContinuous: true
@@ -172,7 +272,7 @@ const PlanStrategy = ({ data, setData }) => {
     setData({ ...data, tasks: [...data.tasks, newTask] });
   };
 
-  const deleteKgi = (id, e) => {
+  const deleteKgi = (id: number, e: React.MouseEvent) => {
      e.stopPropagation(); 
      if(window.confirm("この目標(KGI)と関連するKPI・タスクをすべて削除しますか？")) {
         setData({
@@ -340,11 +440,12 @@ const PlanStrategy = ({ data, setData }) => {
 };
 
 // --- Phase: Task Queue ---
-const TaskQueue = ({ data, setData, setPhase }) => {
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [selectedTaskIds, setSelectedTaskIds] = useState([]);
 
-  const moveTask = (index, direction) => {
+const TaskQueue: React.FC<PhaseProps> = ({ data, setData, setPhase }) => {
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
+
+  const moveTask = (index: number, direction: 'up' | 'down') => {
     const newTasks = [...data.tasks];
     if (direction === 'up' && index > 0) {
       [newTasks[index], newTasks[index - 1]] = [newTasks[index - 1], newTasks[index]];
@@ -355,12 +456,12 @@ const TaskQueue = ({ data, setData, setPhase }) => {
   };
 
   const addNormalTask = () => {
-      const newTask = {
+      const newTask: Task = {
           id: Date.now(),
           kgiId: null,
           kpiId: null,
           title: '新しいタスク',
-          type: TASK_TYPES.NORMAL,
+          type: 'normal',
           status: 'todo',
           estimate: 30,
           isContinuous: false
@@ -368,7 +469,7 @@ const TaskQueue = ({ data, setData, setPhase }) => {
       setData({ ...data, tasks: [...data.tasks, newTask] });
   };
 
-  const deleteTask = (id) => {
+  const deleteTask = (id: number) => {
       setData({ ...data, tasks: data.tasks.filter(t => t.id !== id) });
   };
 
@@ -377,17 +478,17 @@ const TaskQueue = ({ data, setData, setPhase }) => {
       setIsSelectionMode(true);
   };
 
-  const toggleTaskSelection = (taskId) => {
+  const toggleTaskSelection = (taskId: number) => {
       setSelectedTaskIds(prev => 
           prev.includes(taskId) ? prev.filter(id => id !== taskId) : [...prev, taskId]
       );
   };
 
   const confirmStartDay = () => {
-      const tasksToMove = data.tasks.filter(t => selectedTaskIds.includes(t.id));
+      // const tasksToMove = data.tasks.filter(t => selectedTaskIds.includes(t.id));
       const remainingTasks = data.tasks.filter(t => !selectedTaskIds.includes(t.id));
       
-      const orderedTasksToMove = [];
+      const orderedTasksToMove: Task[] = [];
       data.tasks.forEach(t => {
           if (selectedTaskIds.includes(t.id)) orderedTasksToMove.push(t);
       });
@@ -397,10 +498,10 @@ const TaskQueue = ({ data, setData, setPhase }) => {
         tasks: remainingTasks,
         todayTasks: [...data.todayTasks, ...orderedTasksToMove]
       });
-      setPhase('do');
+      if (setPhase) setPhase('do');
   };
 
-  const getLinkedInfo = (task) => {
+  const getLinkedInfo = (task: Task) => {
       if (!task.kgiId) return null;
       const kgi = data.kgis.find(k => k.id === task.kgiId);
       if (!kgi) return null;
@@ -479,7 +580,7 @@ const TaskQueue = ({ data, setData, setPhase }) => {
                 return (
                     <li 
                         key={task.id} 
-                        className={`p-4 flex items-center hover:bg-gray-50 transition-colors group ${isSelectionMode && 'cursor-pointer'} ${isSelected && 'bg-blue-50'}`}
+                        className={`p-4 flex items-center hover:bg-gray-50 transition-colors group ${isSelectionMode ? 'cursor-pointer' : ''} ${isSelected ? 'bg-blue-50' : ''}`}
                         onClick={() => isSelectionMode && toggleTaskSelection(task.id)}
                     >
                         {isSelectionMode ? (
@@ -490,10 +591,10 @@ const TaskQueue = ({ data, setData, setPhase }) => {
                             <div className="text-gray-300 text-xs w-8 font-mono font-bold mr-2">{index + 1}</div>
                         )}
                         
-                        <div className={`flex-1 ${task.type === TASK_TYPES.STRATEGIC ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
+                        <div className={`flex-1 ${task.type === 'strategic' ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                                 <span className={`text-[10px] uppercase px-2 py-0.5 rounded font-bold tracking-wider ${
-                                    task.type === TASK_TYPES.STRATEGIC ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+                                    task.type === 'strategic' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
                                 }`}>
                                 {task.type}
                                 </span>
@@ -548,8 +649,9 @@ const TaskQueue = ({ data, setData, setPhase }) => {
 };
 
 // --- Phase: Do (Visual Updates) ---
-const DoPhase = ({ data, setData }) => {
-  const [activeTask, setActiveTask] = useState(null);
+
+const DoPhase: React.FC<PhaseProps> = ({ data, setData }) => {
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [showRitualModal, setShowRitualModal] = useState(false);
@@ -561,7 +663,7 @@ const DoPhase = ({ data, setData }) => {
   const [isAddingRoutine, setIsAddingRoutine] = useState(false);
 
   useEffect(() => {
-    let interval = null;
+    let interval: number | null = null;
     if (isTimerRunning && timeLeft > 0) {
       interval = setInterval(() => {
         setTimeLeft((prev) => prev - 1);
@@ -569,32 +671,35 @@ const DoPhase = ({ data, setData }) => {
     } else if (timeLeft === 0) {
       setIsTimerRunning(false);
     }
-    return () => clearInterval(interval);
+    return () => {
+        if (interval) clearInterval(interval);
+    };
   }, [isTimerRunning, timeLeft]);
 
-  const formatTime = (seconds) => {
+  const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const adjustTime = (minutes) => {
+  const adjustTime = (minutes: number) => {
     setTimeLeft((prev) => {
       const newTime = prev + minutes * 60;
       return newTime > 0 ? newTime : 0;
     });
   };
 
-  const handleStartTask = (task) => {
+  const handleStartTask = (task: Task) => {
     setActiveTask(task);
-    if (task.type === TASK_TYPES.STRATEGIC) {
+    if (task.type === 'strategic') {
       setShowRitualModal(true);
     } else {
       startTimer(task);
     }
   };
 
-  const startTimer = (task) => {
+  const startTimer = (task: Task | null) => {
+    if (!task) return;
     setTimeLeft(task.estimate * 60);
     setIsTimerRunning(true);
     setShowRitualModal(false);
@@ -602,16 +707,17 @@ const DoPhase = ({ data, setData }) => {
 
   const handleCompleteTask = () => {
     setIsTimerRunning(false);
-    if (activeTask.isContinuous) {
+    if (activeTask && activeTask.isContinuous) {
       setShowKdiModal(true);
     } else {
       finishTask();
     }
   };
 
-  const finishTask = (kdiData = null) => {
+  const finishTask = (kdiData: any = null) => {
+    if (!activeTask) return;
     const updatedToday = data.todayTasks.map(t => 
-      t.id === activeTask.id ? { ...t, status: 'done' } : t
+      t.id === activeTask.id ? { ...t, status: 'done' as const } : t
     );
     
     let updatedKdiLogs = data.checkData.kdiLogs;
@@ -632,34 +738,35 @@ const DoPhase = ({ data, setData }) => {
 
   const addFlashMemo = () => {
     if (!flashMemoText.trim()) return;
-    const newTask = {
+    const newTask: Task = {
         id: Date.now(),
         title: flashMemoText,
-        type: TASK_TYPES.NORMAL,
+        type: 'normal',
         status: 'todo',
         estimate: 15,
         isContinuous: false,
-        kgiId: null
+        kgiId: null,
+        kpiId: null
     };
-    setData({...data, tasks: [...data.tasks, newTask]});
+    setData({ ...data, tasks: [...data.tasks, newTask] });
     setFlashMemoText("");
     setFlashMemoOpen(false);
   };
 
   const addRoutine = () => {
       if(!newRoutineTitle.trim()) return;
-      const newRoutine = { id: Date.now(), title: newRoutineTitle, timing: 'night', done: false };
-      setData({...data, routines: [...data.routines, newRoutine]});
+      const newRoutine: Routine = { id: Date.now(), title: newRoutineTitle, timing: 'night', done: false };
+      setData({ ...data, routines: [...data.routines, newRoutine] });
       setNewRoutineTitle("");
       setIsAddingRoutine(false);
   };
 
-  const deleteRoutine = (id) => {
-      setData({...data, routines: data.routines.filter(r => r.id !== id)});
+  const deleteRoutine = (id: number | string) => {
+      setData({ ...data, routines: data.routines.filter(r => r.id !== id) });
   };
 
-  const updateRoutine = (id, title) => {
-      setData({...data, routines: data.routines.map(r => r.id === id ? {...r, title} : r)});
+  const updateRoutine = (id: number | string, title: string) => {
+      setData({ ...data, routines: data.routines.map(r => r.id === id ? { ...r, title } : r) });
   };
 
   const getActiveLinkInfo = () => {
@@ -724,7 +831,7 @@ const DoPhase = ({ data, setData }) => {
         <h3 className="text-lg font-bold text-gray-900 mb-1 text-center">Execution Quality</h3>
         <p className="text-xs text-gray-400 mb-6 text-center">実行直後の感覚を記録してください</p>
         
-        {['quality', 'focus', 'fatigue'].map((metric) => (
+        {(['quality', 'focus', 'fatigue'] as const).map((metric) => (
           <div key={metric} className="mb-5">
             <div className="flex justify-between text-sm mb-2">
               <span className="capitalize font-medium text-gray-600">{metric}</span>
@@ -766,7 +873,7 @@ const DoPhase = ({ data, setData }) => {
             {activeTask ? (
               <>
                 <div className={`text-xs font-bold uppercase px-3 py-1 rounded-full mb-6 tracking-wider ${
-                   activeTask.type === TASK_TYPES.STRATEGIC ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                   activeTask.type === 'strategic' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
                 }`}>
                   {activeTask.type} Task
                 </div>
@@ -841,7 +948,7 @@ const DoPhase = ({ data, setData }) => {
                 }`}>
                 <div className="flex justify-between items-start mb-1">
                     <span className={`text-[10px] px-1.5 rounded font-bold ${
-                        task.type === TASK_TYPES.STRATEGIC ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'
+                        task.type === 'strategic' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'
                     }`}>{task.type}</span>
                     <span className="text-[10px] text-gray-400">{task.estimate}m</span>
                 </div>
@@ -878,7 +985,7 @@ const DoPhase = ({ data, setData }) => {
                             </div>
                             <input type="checkbox" checked={routine.done} onChange={() => {
                                     const newRoutines = data.routines.map(r => r.id === routine.id ? {...r, done: !r.done} : r);
-                                    setData({...data, routines: newRoutines});
+                                    setData({ ...data, routines: newRoutines });
                                 }} className="hidden" />
                             <input 
                                 type="text" 
@@ -922,56 +1029,71 @@ const DoPhase = ({ data, setData }) => {
 };
 
 // --- Phase: Check (Refined & Fixed) ---
-const CheckPhase = ({ data, setData, setPhase }) => {
-  const [expandedItems, setExpandedItems] = useState({}); 
-  const [deletedIds, setDeletedIds] = useState([]);
+
+const CheckPhase: React.FC<PhaseProps> = ({ data, setData, setPhase }) => {
+  const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>({}); 
+  const [deletedIds, setDeletedIds] = useState<number[]>([]);
   const [thinkingMemo, setThinkingMemo] = useState("");
 
   // useMemoでリストを自動計算（State管理をやめることで削除を即時反映）
+  // AFTER (変更後)
   const analysisList = useMemo(() => {
-      const strategicFailures = data.todayTasks.filter(t => t.type === TASK_TYPES.STRATEGIC && t.status !== 'done')
-          .map(t => ({ ...t, issue: '未完了', type: 'problem' }));
+      // 1. strategicFailures: logData: undefined を明示的に追加、型を AnalysisItem[] にキャスト
+      const strategicFailures: AnalysisItem[] = data.todayTasks.filter(t => t.type === 'strategic' && t.status !== 'done')
+          .map(t => ({ 
+              ...t, 
+              issue: '未完了', 
+              analysisKind: 'problem',
+              logData: undefined // AnalysisItemのオプショナルプロパティを満たす
+          } as AnalysisItem)); // または as AnalysisItem でキャスト
 
       const seenIds = new Set(strategicFailures.map(f => f.id));
       
-      const lowQuality = data.checkData.kdiLogs
+      // 2. lowQuality: そのままでOKだが、分析リストに結合するために AnalysisItem[] にキャストするとより安全
+      const lowQuality: AnalysisItem[] = data.checkData.kdiLogs
           .filter(log => log.quality <= 2 || log.focus <= 2)
           .map(log => {
                const task = data.todayTasks.find(t => t.id === log.taskId);
                if (!task || seenIds.has(task.id)) return null;
-               return { ...task, issue: '質/集中不足', type: 'problem', logData: log };
+               return { ...task, issue: '質/集中不足', analysisKind: 'problem', logData: log } as AnalysisItem;
           })
-          .filter(Boolean);
+          .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
       lowQuality.forEach(item => seenIds.add(item.id));
 
-      const successes = data.todayTasks
+      // 3. successes: logData: undefined を明示的に追加、型を AnalysisItem[] にキャスト
+      const successes: AnalysisItem[] = data.todayTasks
           .filter(t => t.status === 'done')
           .filter(t => !seenIds.has(t.id))
-          .map(t => ({ ...t, issue: '完了 (Success)', type: 'success' }));
+          .map(t => ({ 
+              ...t, 
+              issue: '完了 (Success)', 
+              analysisKind: 'success',
+              logData: undefined // AnalysisItemのオプショナルプロパティを満たす
+          } as AnalysisItem)); // または as AnalysisItem でキャスト
 
       // deletedIdsに含まれないものだけを返す
       return [...strategicFailures, ...lowQuality, ...successes].filter(item => !deletedIds.includes(item.id));
   }, [data, deletedIds]);
 
-  const toggleExpand = (taskId) => {
+  const toggleExpand = (taskId: number) => {
       setExpandedItems(prev => ({...prev, [taskId]: !prev[taskId]}));
       setThinkingMemo("");
   };
 
-  const completeAnalysisAndRemove = (taskId) => {
+  const completeAnalysisAndRemove = (taskId: number) => {
       setDeletedIds(prev => [...prev, taskId]);
       setThinkingMemo("");
   };
 
   // Flash Memo削除: confirmなしで即削除
-  const deleteQueueTask = (id) => {
+  const deleteQueueTask = (id: number) => {
       setData(prev => ({...prev, tasks: prev.tasks.filter(t => t.id !== id)}));
   };
   
-  const flashMemos = data.tasks.filter(t => t.type === TASK_TYPES.NORMAL);
+  const flashMemos = data.tasks.filter(t => t.type === 'normal');
 
-  const getTaskLinkInfo = (task) => {
+  const getTaskLinkInfo = (task: Task) => {
     if (!task.kgiId) return null;
     const kgi = data.kgis.find(k => k.id === task.kgiId);
     if (!kgi) return null;
@@ -998,7 +1120,7 @@ const CheckPhase = ({ data, setData, setPhase }) => {
               {analysisList.map((item) => {
                   const linkInfo = getTaskLinkInfo(item);
                   const isExpanded = expandedItems[item.id];
-                  const isProblem = item.type === 'problem';
+                  const isProblem = item.analysisKind === 'problem';
 
                   return (
                     <div key={item.id} className={`bg-white border rounded-xl shadow-sm transition-all relative overflow-hidden ${isProblem ? 'border-red-100' : 'border-gray-200'}`}>
@@ -1124,7 +1246,7 @@ const CheckPhase = ({ data, setData, setPhase }) => {
           
           <div className="fixed bottom-8 left-0 right-0 flex justify-center pointer-events-none">
               <button 
-                onClick={() => setPhase('plan-queue')} 
+                onClick={() => setPhase && setPhase('plan-queue')} 
                 className="pointer-events-auto bg-gray-900 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-black transition-transform hover:scale-105 flex items-center gap-2"
               >
                   Finish & Return to Queue <ArrowDown size={16} />
@@ -1136,9 +1258,9 @@ const CheckPhase = ({ data, setData, setPhase }) => {
 
 // --- Main App Component ---
 
-const App = () => {
-  const [data, setData] = useState(initialData);
-  const [phase, setPhase] = useState('plan-strategy'); 
+const App: React.FC = () => {
+  const [data, setData] = useState<AppData>(initialData);
+  const [phase, setPhase] = useState<Phase>('plan-strategy'); 
 
   const renderPhase = () => {
     switch (phase) {
@@ -1156,7 +1278,7 @@ const App = () => {
       <main className="flex-1 overflow-y-auto bg-white scroll-smooth">
         {renderPhase()}
       </main>
-      <style jsx global>{`
+      <style>{`
         @keyframes fade-in {
           from { opacity: 0; }
           to { opacity: 1; }
