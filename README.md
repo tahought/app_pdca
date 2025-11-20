@@ -6,7 +6,7 @@
 
 ---
 
-## Demo App
+## ・ Demo App
 
 → **https://tahought.github.io/app_pdca/**
 
@@ -14,7 +14,7 @@
 
 ---
 
-##  概要 (Overview)
+##  ・ 概要 (Overview)
 
 「ただタスクを消化するのではなく、目標（ゴール）に向かって着実に進むためのプラットフォーム」
 
@@ -25,7 +25,7 @@ PDCATodoは、冨田和正さんの「超鬼速PDCA」の本の内容をベー�
 
 ---
 
-##  スクリーンショット (Screenshots)
+##  ・ スクリーンショット (Screenshots)
 
 1. Strategic Planning (Plan)  
 <img src="./images/screenshot_plan.png" width="300" alt="Plan画面">
@@ -57,7 +57,7 @@ KGI（最終目標）から逆算し、KPIとタスクをグリッドUIで俯瞰
 
 ---
 
-##  特徴とこだわり (Features & Philosophy)
+##  ・ 特徴とこだわり (Features & Philosophy)
 
 ### 1. KGI/KPI 起点の戦略的プランニング
 
@@ -93,7 +93,7 @@ Doフェーズに常設されており、集中力を途切れさせません。
 
 ---
 
-##  使い方 (How to Use)
+##  ・ 使い方 (How to Use)
 
 アプリは以下の4つのフェーズを循環させて使います。
 
