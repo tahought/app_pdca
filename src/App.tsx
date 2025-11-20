@@ -5,7 +5,8 @@ import {
   Zap, ChevronRight, ChevronDown, Target,
   RefreshCw, MessageSquare, Trash2, X, Edit2, Save,
   Calendar, Home, Minus, Inbox, Lightbulb, PenTool, Square,
-  MoreHorizontal, LayoutGrid
+  MoreHorizontal, LayoutGrid, Star, Activity, Battery,
+  Database
 } from 'lucide-react';
 
 // --- Types & Interfaces ---
@@ -78,6 +79,8 @@ interface AnalysisItem extends Task {
 
 // --- Constants ---
 
+const STORAGE_KEY = 'pdca-todo-app-v1';
+
 const TASK_TYPES: Record<string, TaskType> = {
   STRATEGIC: 'strategic',
   NORMAL: 'normal',
@@ -90,45 +93,13 @@ interface Factor {
   detail: string;
 }
 
-const FAILURE_FACTORS: Factor[] = [
-  { id: 'A', label: 'A. 行動不足', detail: '時間がなかった、忘れていた' },
-  { id: 'B', label: 'B. 質・量不足', detail: '見積もりが甘い、集中不足' },
-  { id: 'C', label: 'C. 想定外', detail: '差し込み、体調不良' },
-  { id: 'D', label: 'D. 仮説誤り', detail: '効果が薄い、無意味だった' },
-];
+// --- Empty Data (Reset State) ---
 
-const SUCCESS_FACTORS: Factor[] = [
-  { id: 'A', label: 'A. 再現性確保 (Keep)', detail: '成功パターンとしてルーティン化・定着させる' },
-  { id: 'B', label: 'B. 横展開 (Apply)', detail: 'このやり方を他のタスクやプロジェクトにも応用する' },
-  { id: 'C', label: 'C. 仕組み化 (Systemize)', detail: 'ツール化や自動化でさらに効率を上げる' },
-  { id: 'D', label: 'D. 実績記録 (Log)', detail: '自信として記録し、モチベーションにする' },
-];
-
-// --- Initial Data ---
-
-const initialData: AppData = {
-  kgis: [
-    {
-      id: 101,
-      title: 'アプリ完成で月1万収益',
-      deadline: '2026-03-31',
-      isExpanded: true, 
-      kpis: [
-        { id: 201, title: 'MVPの仕様を定義する', isExpanded: true },
-        { id: 202, title: 'デザインシステム構築', isExpanded: true } 
-      ]
-    }
-  ],
-  tasks: [
-    { id: 1, kgiId: 101, kpiId: 201, title: '競合アプリ調査', type: 'strategic', status: 'todo', estimate: 60, isContinuous: true },
-    { id: 2, kgiId: 101, kpiId: 201, title: 'UIデザイン作成', type: 'strategic', status: 'todo', estimate: 90, isContinuous: true },
-    { id: 3, kgiId: null, kpiId: null, title: 'メール返信', type: 'normal', status: 'todo', estimate: 30, isContinuous: false },
-  ],
-  routines: [
-    { id: 'r1', title: '朝：KGI確認', timing: 'morning', done: false },
-    { id: 'r2', title: '夜：日次レビュー', timing: 'night', done: false },
-  ],
-  todayTasks: [], 
+const emptyData: AppData = {
+  kgis: [],
+  tasks: [],
+  routines: [],
+  todayTasks: [],
   checkData: {
     problemLogs: [], 
     keepLogs: [],    
@@ -177,6 +148,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPhase, setPhase }) => {
           </button>
         ))}
       </nav>
+      <div className="p-4 text-[10px] text-gray-400 text-center border-t border-gray-100">
+        Auto-saved to LocalStorage <Database size={10} className="inline ml-1"/>
+      </div>
     </div>
   );
 };
@@ -297,6 +271,16 @@ const PlanStrategy: React.FC<PhaseProps> = ({ data, setData }) => {
       </header>
 
       <div className="space-y-10">
+        {data.kgis.length === 0 && (
+             <div className="flex flex-col items-center justify-center py-20 text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
+                 <Target size={48} className="mb-4 opacity-20" />
+                 <p className="text-lg font-medium">目標が設定されていません</p>
+                 <p className="text-sm mb-6">まずは "New Goal" ボタンからKGIを設定しましょう</p>
+                 <button onClick={addKgi} className="bg-blue-50 text-blue-600 px-6 py-2 rounded-lg font-bold hover:bg-blue-100 transition-colors">
+                     目標を追加する
+                 </button>
+             </div>
+        )}
         {data.kgis.map((kgi, index) => (
           <div key={kgi.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all">
             <div onClick={() => toggleKgi(kgi.id)} className="bg-gray-50 px-8 py-5 flex justify-between items-center cursor-pointer hover:bg-gray-100 select-none border-b border-gray-200">
@@ -825,30 +809,53 @@ const DoPhase: React.FC<PhaseProps> = ({ data, setData }) => {
     );
   };
 
-  const KdiModal = () => (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full animate-scale-in">
-        <h3 className="text-lg font-bold text-gray-900 mb-1 text-center">Execution Quality</h3>
-        <p className="text-xs text-gray-400 mb-6 text-center">実行直後の感覚を記録してください</p>
-        
-        {(['quality', 'focus', 'fatigue'] as const).map((metric) => (
-          <div key={metric} className="mb-5">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="capitalize font-medium text-gray-600">{metric}</span>
-              <span className="text-blue-600 font-bold bg-blue-50 px-2 rounded">{kdiRatings[metric]}</span>
+  const KdiModal = () => {
+    const metrics = [
+        { id: 'quality', label: 'Quality', icon: Star, desc: '成果物の質・出来栄え' },
+        { id: 'focus', label: 'Focus', icon: Target, desc: '集中度・フロー状態' },
+        { id: 'fatigue', label: 'Fatigue', icon: Battery, desc: '疲労度 (低い=元気)' },
+    ] as const;
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full animate-scale-in">
+            <h3 className="text-xl font-bold text-gray-900 mb-1 text-center">Execution Log</h3>
+            <p className="text-xs text-gray-400 mb-6 text-center">直感で評価を入力してください</p>
+            
+            <div className="space-y-6">
+                {metrics.map((m) => (
+                <div key={m.id}>
+                    <div className="flex items-center gap-2 mb-3">
+                        <m.icon size={16} className="text-blue-600"/>
+                        <span className="text-sm font-bold text-gray-700">{m.label}</span>
+                        <span className="text-xs text-gray-400 ml-auto">{m.desc}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                        {[1, 2, 3, 4, 5].map((score) => (
+                            <button
+                                key={score}
+                                onClick={() => setKdiRatings({...kdiRatings, [m.id]: score})}
+                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+                                    kdiRatings[m.id] === score 
+                                    ? 'bg-blue-600 text-white shadow-md transform scale-105' 
+                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                }`}
+                            >
+                                {score}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                ))}
             </div>
-            <input type="range" min="1" max="5" step="1" value={kdiRatings[metric]} onChange={(e) => setKdiRatings({...kdiRatings, [metric]: parseInt(e.target.value)})} className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600" />
-            <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-              <span>Low</span><span>High</span>
-            </div>
-          </div>
-        ))}
-        <button onClick={() => finishTask(kdiRatings)} className="w-full mt-2 bg-gray-900 text-white py-3 rounded-xl hover:bg-black transition-colors font-bold">
-          Complete & Log
-        </button>
-      </div>
-    </div>
-  );
+
+            <button onClick={() => finishTask(kdiRatings)} className="w-full mt-8 bg-gray-900 text-white py-3 rounded-xl hover:bg-black transition-colors font-bold flex items-center justify-center gap-2">
+                <CheckCircle size={18} /> Complete & Log
+            </button>
+        </div>
+        </div>
+    );
+  };
 
   return (
     <div className="p-6 max-w-4xl mx-auto h-full flex flex-col relative">
@@ -1061,16 +1068,20 @@ const CheckPhase: React.FC<PhaseProps> = ({ data, setData, setPhase }) => {
 
       lowQuality.forEach(item => seenIds.add(item.id));
 
-      // 3. successes: logData: undefined を明示的に追加、型を AnalysisItem[] にキャスト
+      // 3. successes: logDataを正しく結合する
       const successes: AnalysisItem[] = data.todayTasks
           .filter(t => t.status === 'done')
           .filter(t => !seenIds.has(t.id))
-          .map(t => ({ 
-              ...t, 
-              issue: '完了 (Success)', 
-              analysisKind: 'success',
-              logData: undefined // AnalysisItemのオプショナルプロパティを満たす
-          } as AnalysisItem)); // または as AnalysisItem でキャスト
+          .map(t => {
+              // 該当タスクのログを探して結合
+              const log = data.checkData.kdiLogs.find(l => l.taskId === t.id);
+              return { 
+                  ...t, 
+                  issue: '完了 (Success)', 
+                  analysisKind: 'success',
+                  logData: log // 見つかればセット、なければundefined
+              } as AnalysisItem;
+          });
 
       // deletedIdsに含まれないものだけを返す
       return [...strategicFailures, ...lowQuality, ...successes].filter(item => !deletedIds.includes(item.id));
@@ -1144,9 +1155,19 @@ const CheckPhase: React.FC<PhaseProps> = ({ data, setData, setPhase }) => {
                                 <div className="font-bold text-gray-900 text-lg">{item.title}</div>
                                 
                                 {item.logData && (
-                                    <div className="flex gap-3 mt-2 text-xs text-gray-500">
-                                        <div className="flex items-center gap-1"><Zap size={12}/> Quality: <span className="font-bold text-gray-700">{item.logData.quality}</span></div>
-                                        <div className="flex items-center gap-1"><Target size={12}/> Focus: <span className="font-bold text-gray-700">{item.logData.focus}</span></div>
+                                    <div className="flex gap-4 mt-3 text-xs">
+                                        <div className="flex items-center gap-1 text-gray-600">
+                                            <Star size={14} className="text-yellow-500 fill-yellow-500"/>
+                                            Quality: <span className="font-bold text-lg">{item.logData.quality}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 text-gray-600">
+                                            <Target size={14} className="text-blue-500"/>
+                                            Focus: <span className="font-bold text-lg">{item.logData.focus}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 text-gray-600">
+                                            <Battery size={14} className="text-green-500"/>
+                                            Fatigue: <span className="font-bold text-lg">{item.logData.fatigue}</span>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -1259,8 +1280,29 @@ const CheckPhase: React.FC<PhaseProps> = ({ data, setData, setPhase }) => {
 // --- Main App Component ---
 
 const App: React.FC = () => {
-  const [data, setData] = useState<AppData>(initialData);
+  // LocalStorage Initialization
+  const [data, setData] = useState<AppData>(() => {
+    try {
+      const savedData = localStorage.getItem(STORAGE_KEY);
+      if (savedData) {
+        return JSON.parse(savedData);
+      }
+    } catch (error) {
+      console.error('Failed to load data from localStorage', error);
+    }
+    return emptyData;
+  });
+
   const [phase, setPhase] = useState<Phase>('plan-strategy'); 
+
+  // Auto-save to LocalStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.error('Failed to save data to localStorage', error);
+    }
+  }, [data]);
 
   const renderPhase = () => {
     switch (phase) {
