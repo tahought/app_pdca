@@ -29,9 +29,14 @@ PDCATodoは、冨田和正さんの「超鬼速PDCA」の本の内容をベー�
 
 1. Strategic Planning (Plan)  
 <img src="./images/screenshot_plan.png" width="300" alt="Plan画面">
-2. Focus & Do (Do)  
+
+2. Select-task (Do)  
+<img src="./images/screenshot_select.png" width="300" alt="Select画面">
+
+3. Focus & Do (Do)  
 <img src="./images/screenshot_do.png" width="300" alt="Do画面">
-3. Deep Analysis (Check)
+
+4. Deep Analysis (Check)
 <img src="./images/screenshot_check.png" width="300" alt="Check画面">
 
 ---
